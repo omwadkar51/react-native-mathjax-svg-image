@@ -1,3 +1,8 @@
+import { Dimensions, Platform, StatusBar } from 'react-native';
+
+const MOBILE_WIDTH = 375;
+const MOBILE_HEIGHT = 812;
+
 const TextStylePropTypes = [
     'display',
     'width',
@@ -87,7 +92,7 @@ const TextStylePropTypes = [
     'elevation',
     'color',
     'fontFamily',
-    'fontSize',
+    // 'fontSize',
     'fontStyle',
     'fontWeight',
     'fontVariant',
@@ -152,4 +157,36 @@ export const STYLESETS = Object.freeze({
 });
 export const stylePropTypes = {
     [STYLESETS.TEXT]: TextStylePropTypes,
+};
+
+export function responsiveFontSize(fontSize) {
+  const { height, width } = Dimensions.get('window');
+  const standardScreenHeight = Math.max(height, width);
+  const standardLength = width > height ? width : height;
+  const offset =
+    width > height ? 0 : Platform.OS === 'ios' ? 78 : StatusBar.currentHeight;
+
+  const deviceHeight =
+    Platform.OS === 'android' ? standardLength - (offset ?? 0) : standardLength;
+
+  const heightPercent = (fontSize * deviceHeight) / standardScreenHeight;
+  return Math.round(heightPercent);
+}
+
+const percentageCalculation = (max, val) => max * (val / 100);
+
+export const responsiveHeight = (h) => {
+  if (Platform.OS === 'web') {
+    return percentageCalculation(MOBILE_HEIGHT, h);
+  }
+  const { height } = Dimensions.get('window');
+  return percentageCalculation(height, h);
+};
+
+export const responsiveWidth = (w) => {
+  if (Platform.OS === 'web') {
+    return percentageCalculation(MOBILE_WIDTH, w);
+  }
+  const { width } = Dimensions.get('window');
+  return percentageCalculation(width, w);
 };
