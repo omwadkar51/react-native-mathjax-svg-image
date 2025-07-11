@@ -1,10 +1,12 @@
 import React, { memo, Fragment } from 'react';
-import { Text, View } from 'react-native';
+import { Text, View, ScrollView } from 'react-native';
 import AutoHeightImage from "react-native-auto-height-image";
 import { SvgFromXml } from 'react-native-svg';
 import { decode } from 'html-entities';
 import { cssStringToRNStyle } from './HTMLStyles';
 import {responsiveFontSize, responsiveWidth} from "./HTMLUtils";
+import { Table, Row, Rows } from 'react-native-table-component';
+
 
 const mathjax = require('./mathjax/mathjax').mathjax;
 const TeX = require('./mathjax/input/tex').TeX;
@@ -93,6 +95,26 @@ const GenerateSvgComponent = ({ item, fontSize, color }) => {
     );
 };
 
+const getDynamicColumnWidths = (head = [], rows = []) => {
+    const allRows = [head, ...rows];
+    const colCount = head.length;
+
+    const widths = Array(colCount).fill(0);
+
+    for (let col = 0; col < colCount; col++) {
+        for (let row = 0; row < allRows.length; row++) {
+            const cell = allRows[row][col] || '';
+            const charWidth = 7; // 📏 adjust for font size
+            const estimatedWidth = cell.length * charWidth + 20; // buffer padding
+            if (estimatedWidth > widths[col]) {
+                widths[col] = estimatedWidth;
+            }
+        }
+    }
+
+    return widths;
+};
+
 
 const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = null }) => {
     let rnStyle = null;
@@ -118,7 +140,62 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
     } else if (item?.kind === 'img') {
         isImage = true;
         imageSource = adaptor.getAttribute(item, 'src');
+    } else if (item?.kind === 'table') {
+
+        const extractTextFromNode = (node) => {
+            if (node.kind === '#text') return adaptor.value(node)?.trim() || '';
+            if (!node.children) return '';
+            return node.children.map(extractTextFromNode).join(' ').trim();
+        };
+
+        // Convert parsed table to 2D array
+        const tableHead = [];
+        const tableRows = [];
+
+        item.children?.forEach((section) => {
+            if (section.kind === 'tbody' || section.kind === 'thead') {
+                section.children?.forEach((tr, rowIndex) => {
+                    const row = tr.children?.map((td) => extractTextFromNode(td)) || [];
+                    if (rowIndex === 0) {
+                        tableHead.push(...row);
+                    } else {
+                        tableRows.push(row);
+                    }
+                });
+            }
+        });
+
+        const widthArr = getDynamicColumnWidths(tableHead, tableRows);
+        const totalWidth = widthArr.reduce((sum, w) => sum + w, 0);
+
+        return (
+            <View>
+                <ScrollView horizontal>
+                    <View style={{ width: totalWidth }}>
+                        <Table borderStyle={{ borderWidth: 1, borderColor: '#ccc' }}>
+                            {tableHead.length > 0 && (
+                                <Row
+                                    data={tableHead}
+                                    widthArr={widthArr}
+                                    style={{ backgroundColor: '#eee', borderColor: '#ccc',borderRightWidth: 2}}
+                                    textStyle={{ fontWeight: 'bold', textAlign: 'center' }}
+                                />
+                            )}
+                            <Rows
+                                data={tableRows}
+                                widthArr={widthArr}
+                                style={{ borderColor: '#ccc', borderRightWidth: 2,}}
+                                textStyle={{ textAlign: 'center', flexWrap: 'wrap' }}
+                            />
+                        </Table>
+                    </View>
+                </ScrollView>
+            </View>
+
+        );
     }
+
+
 
     return (
         <Fragment>
@@ -128,9 +205,9 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
                         <Text style={{ fontSize: (fontSize * 2), color, ...rnStyle }}>{text}</Text>
                     )
                     :
-                isImage ? (
-                    <AutoHeightImage source={{uri: imageSource}} width={responsiveWidth(65)}/>
-                ) : (
+                    isImage ? (
+                        <AutoHeightImage source={{uri: imageSource}} width={responsiveWidth(65)}/>
+                    ) : (
                         item?.kind === 'mjx-container' ?
                             <GenerateSvgComponent item={item} fontSize={fontSize} color={color}/>
                             :
@@ -150,6 +227,7 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
 };
 
 const ConvertToComponent = ({ texString = '', fontSize = 12, fontCache = false, color }) => {
+
     if (!texString) {
         return '';
     }
