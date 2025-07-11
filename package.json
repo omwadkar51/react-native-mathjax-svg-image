@@ -24,7 +24,7 @@
     "html-entities": "^2.4.0",
     "mhchemparser": "^4.2.1",
     "react-native-table-component": "^1.2.2",
-    "react-native-auto-height-image": "https://github:omwadkar51/react-native-auto-height-image"
+    "react-native-auto-height-image": "github:omwadkar51/react-native-auto-height-image"
   },
   "homepage": "https://github.com/omwadkar51/react-native-auto-height-image",
   "license": "MIT"
