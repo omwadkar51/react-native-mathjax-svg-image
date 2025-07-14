@@ -156,7 +156,7 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
             if (section.kind === 'tbody' || section.kind === 'thead') {
                 section.children?.forEach((tr, rowIndex) => {
                     const row = tr.children?.map((td) => extractTextFromNode(td)) || [];
-                    if (rowIndex === 0) {
+                    if (section.kind === 'thead') {
                         tableHead.push(...row);
                     } else {
                         tableRows.push(row);
