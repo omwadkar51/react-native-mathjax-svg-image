@@ -205,9 +205,41 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
                         <Text style={{ fontSize: (fontSize * 2), color, ...rnStyle }}>{text}</Text>
                     )
                     :
-                    isImage ? (
-                        <AutoHeightImage source={{uri: imageSource}} width={responsiveWidth(65)}/>
-                    ) : (
+                    isImage ? (() => {
+                        const styleAttr = adaptor.getAttribute(item, 'style');
+                        let parsedWidth, parsedHeight;
+
+                        const convertToPx = (valueStr) => {
+                            if (!valueStr) return undefined;
+                            if (valueStr.endsWith('in')) return parseFloat(valueStr) * 96; // 1in = 96px
+                            if (valueStr.endsWith('px')) return parseFloat(valueStr);
+                            return parseFloat(valueStr); // fallback for unitless
+                        };
+
+                        if (styleAttr) {
+                            const widthMatch = styleAttr.match(/width\s*:\s*([\d.]+(px|in)?)/);
+                            const heightMatch = styleAttr.match(/height\s*:\s*([\d.]+(px|in)?)/);
+
+                            if (widthMatch) parsedWidth = convertToPx(widthMatch[1]);
+                            if (heightMatch) parsedHeight = convertToPx(heightMatch[1]);
+                        }
+
+                        const maxWidth = responsiveWidth(80);
+                        const fallbackWidth = responsiveWidth(65);
+
+                        if (parsedWidth && parsedWidth > maxWidth) {
+                            const ratio = maxWidth / parsedWidth;
+                            parsedWidth = maxWidth;
+                            if (parsedHeight) parsedHeight *= ratio;
+                        }
+
+                        return (
+                            <AutoHeightImage
+                                source={{ uri: imageSource }}
+                                width={parsedWidth || fallbackWidth}
+                            />
+                        );
+                    })() : (
                         item?.kind === 'mjx-container' ?
                             <GenerateSvgComponent item={item} fontSize={fontSize} color={color}/>
                             :
