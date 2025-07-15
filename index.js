@@ -96,19 +96,21 @@ const GenerateSvgComponent = ({ item, fontSize, color }) => {
 };
 
 const getDynamicColumnWidths = (head = [], rows = []) => {
-    const allRows = [head, ...rows];
-    const colCount = head.length;
+    const allRows = [...(head.length ? [head] : []), ...rows].filter(row => row.length > 0);
+
+    if (allRows.length === 0) return [];
+
+    const colCount = Math.max(...allRows.map(row => row.length));
+    const charWidth = 7;
+    const padding = 20;
 
     const widths = Array(colCount).fill(0);
 
-    for (let col = 0; col < colCount; col++) {
-        for (let row = 0; row < allRows.length; row++) {
-            const cell = allRows[row][col] || '';
-            const charWidth = 7; // 📏 adjust for font size
-            const estimatedWidth = cell.length * charWidth + 20; // buffer padding
-            if (estimatedWidth > widths[col]) {
-                widths[col] = estimatedWidth;
-            }
+    for (const row of allRows) {
+        for (let col = 0; col < colCount; col++) {
+            const cell = row[col] || '';
+            const estimatedWidth = (cell.length * charWidth) + padding;
+            widths[col] = Math.max(widths[col], estimatedWidth);
         }
     }
 
@@ -152,20 +154,35 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
         const tableHead = [];
         const tableRows = [];
 
+        const allRows = [];
+
+        // Collect all rows from thead, tbody, or direct children
         item.children?.forEach((section) => {
-            if (section.kind === 'tbody' || section.kind === 'thead') {
-                section.children?.forEach((tr, rowIndex) => {
-                    const row = tr.children?.map((td) => extractTextFromNode(td)) || [];
-                    if (section.kind === 'thead') {
-                        tableHead.push(...row);
-                    } else {
-                        tableRows.push(row);
-                    }
-                });
+            if (section.kind === 'thead' || section.kind === 'tbody') {
+                allRows.push(...(section.children || []));
+            } else if (section.kind === 'tr') {
+                allRows.push(section);
             }
         });
 
-        const widthArr = getDynamicColumnWidths(tableHead, tableRows);
+        // Fallback if no thead/tbody wrapper is present
+        if (allRows.length > 0) {
+            tableHead.push(...(allRows[0].children?.map(td => extractTextFromNode(td)) || []));
+            for (let i = 1; i < allRows.length; i++) {
+                const row = allRows[i].children?.map(td => extractTextFromNode(td)) || [];
+                tableRows.push(row);
+            }
+        }
+
+        let effectiveHead = tableHead;
+        let effectiveRows = tableRows;
+
+        if (tableHead.length === 0 && tableRows.length > 0) {
+            effectiveHead = tableRows[0];
+            effectiveRows = tableRows.slice(1);
+        }
+
+        const widthArr = getDynamicColumnWidths(effectiveHead, effectiveRows);
         const totalWidth = widthArr.reduce((sum, w) => sum + w, 0);
 
         return (
@@ -173,16 +190,16 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
                 <ScrollView horizontal>
                     <View style={{ width: totalWidth }}>
                         <Table borderStyle={{ borderWidth: 1, borderColor: '#ccc' }}>
-                            {tableHead.length > 0 && (
+                            {effectiveHead?.length > 0 &&
                                 <Row
-                                    data={tableHead}
+                                    data={effectiveHead}
                                     widthArr={widthArr}
                                     style={{ backgroundColor: '#eee', borderColor: '#ccc',borderRightWidth: 2}}
                                     textStyle={{ fontWeight: 'bold', textAlign: 'center' }}
                                 />
-                            )}
+                            }
                             <Rows
-                                data={tableRows}
+                                data={effectiveRows}
                                 widthArr={widthArr}
                                 style={{ borderColor: '#ccc', borderRightWidth: 2,}}
                                 textStyle={{ textAlign: 'center', flexWrap: 'wrap' }}
