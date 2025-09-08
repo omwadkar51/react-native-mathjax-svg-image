@@ -37,8 +37,8 @@ const tagToStyle = {
     em: { fontStyle: 'italic' },
     mark: { backgroundColor: 'yellow' },
     small: { fontSize: 8 },
-    sup: { fontSize: responsiveFontSize(1.5), alignSelf: "flex-start", left: responsiveWidth(-0.5)},
-    sub: { alignSelf: "flex-end" , fontSize: responsiveFontSize(1.5), left: responsiveWidth(-0.5)}
+    sup: { fontSize: responsiveFontSize(9), alignSelf: "flex-start", left: responsiveWidth(0.2)},
+    sub: { alignSelf: "flex-end" , fontSize: responsiveFontSize(9), left: responsiveWidth(0.2)}
 };
 
 const getScale = _svgString => {
