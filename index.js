@@ -228,14 +228,19 @@ const GenerateTextComponent = ({ fontSize, color, index, item, parentStyle = nul
 
                         const convertToPx = (valueStr) => {
                             if (!valueStr) return undefined;
+                            if (valueStr.endsWith('%')) {
+                                // Convert percentage to pixels based on screen width
+                                const percentage = parseFloat(valueStr);
+                                return (percentage / 100) * responsiveWidth(100);
+                            }
                             if (valueStr.endsWith('in')) return parseFloat(valueStr) * 96; // 1in = 96px
                             if (valueStr.endsWith('px')) return parseFloat(valueStr);
                             return parseFloat(valueStr); // fallback for unitless
                         };
 
                         if (styleAttr) {
-                            const widthMatch = styleAttr.match(/width\s*:\s*([\d.]+(px|in)?)/);
-                            const heightMatch = styleAttr.match(/height\s*:\s*([\d.]+(px|in)?)/);
+                            const widthMatch = styleAttr.match(/width\s*:\s*([\d.]+(%|px|in)?)/);
+                            const heightMatch = styleAttr.match(/height\s*:\s*([\d.]+(%|px|in)?)/);
 
                             if (widthMatch) parsedWidth = convertToPx(widthMatch[1]);
                             if (heightMatch) parsedHeight = convertToPx(heightMatch[1]);
