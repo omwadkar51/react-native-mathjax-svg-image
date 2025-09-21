@@ -65,7 +65,7 @@ const USE_RESPONSIVE_FONT_SIZE = true;
 const TEXT_SAFE_PROPS = [
   'color',
   'fontFamily',
-  'fontSize',
+  // 'fontSize',
   'fontStyle',
   'fontWeight',
   'fontVariant',
