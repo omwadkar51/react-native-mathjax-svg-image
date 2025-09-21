@@ -83,7 +83,6 @@ const TEXT_SAFE_PROPS = [
   'textDecorationColor',
   'textTransform',
   'writingDirection',
-  // Optional: keep backgroundColor if you want highlight-like spans
   'backgroundColor',
   'opacity',
   'marginLeft', 
@@ -91,7 +90,8 @@ const TEXT_SAFE_PROPS = [
   'marginHorizontal',
   'paddingLeft', 
   'paddingRight', 
-  'paddingHorizontal'
+  'paddingHorizontal',
+  'transform',
 ];
 
 // Layout/box props we do NOT want on inline text nodes

@@ -24,9 +24,7 @@ const packageList = AllPackages.sort().join(', ').split(/\s*,\s*/);
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
 
-/* -------------------- NEW: HTML preprocessor -------------------- */
-// - forceSingleLineHtml: remove all newlines and collapse runs of spaces
-// - stripWhiteSpacePreWrap: remove "white-space: pre-wrap" from any style
+/* -------------------- HTML preprocessor -------------------- */
 function preprocessHtmlString(
   html,
   { forceSingleLineHtml = true, stripWhiteSpacePreWrap = true } = {}
@@ -35,19 +33,17 @@ function preprocessHtmlString(
   let s = String(html);
 
   if (stripWhiteSpacePreWrap) {
-    // remove "white-space: pre-wrap" (with or without trailing semicolon, any spacing/case)
     s = s.replace(/white\s*-\s*space\s*:\s*pre-wrap\s*;?/gi, '');
   }
 
   if (forceSingleLineHtml) {
-    // turn all newlines into spaces, then collapse runs of spaces/tabs to one space
     s = s.replace(/\r?\n/g, ' ').replace(/[ \t\f\v]+/g, ' ');
   }
 
   return s;
 }
 
-/* ---------------- Tag-level default styles (text-only) ---------------- */
+/* ---------------- Tag-level default styles ---------------- */
 const tagToStyle = {
   u: { textDecorationLine: 'underline' },
   ins: { textDecorationLine: 'underline' },
@@ -61,10 +57,8 @@ const tagToStyle = {
   em: { fontStyle: 'italic' },
   mark: { backgroundColor: 'yellow' },
   small: { fontSize: 10 },
-  // sup/sub baseline handled in helpers below
 };
 
-// Inline tags we can safely render inside a parent <Text>
 const INLINE_TAGS = new Set([
   '#text',
   'span',
@@ -98,7 +92,6 @@ const getScale = (_svgString) => {
 };
 
 const applyScale = (svgString, [width, height]) => {
-  if (width > 350) width = responsiveWidth(100);
   let ret = svgString.replace(
     /(<svg[^\>]+height=\")([\d\.]+)([ep]x\"[^\>]+>)/gi,
     `$1${height}$3`
@@ -118,7 +111,6 @@ const applyColor = (svgString, fillColor) =>
 const GenerateSvgComponent = ({ item, fontSize, color }) => {
   let svgText = adaptor.innerHTML(item);
   const [width, height] = getScale(svgText);
-  // inherit app font; scale & color
   svgText = svgText.replace(/font-family=\"([^\"]*)\"/gmi, '');
   svgText = applyScale(svgText, [width * fontSize, height * fontSize]);
   svgText = applyColor(svgText, color);
@@ -150,14 +142,15 @@ const extractTextFromNode = (node) => {
 };
 
 /* --------------------- Sup/Sub helper --------------------------------- */
+// --- FINAL FIX: Use 'transform' for the vertical shift. It will now pass the sanitizer. ---
 const applySupSubAdjustment = (kind, baseStyle, fontSize) => {
   if (kind !== 'sup' && kind !== 'sub') return baseStyle;
   const tiny = responsiveFontSize(Math.max(8, Math.round(fontSize * 1.0)));
-  const shift = kind === 'sup' ? -tiny * 0.4 : tiny * 0.2;
+  const shift = kind === 'sup' ? -tiny * 0.7 : tiny * 0.4; // Increased shift
   return {
     ...(baseStyle || {}),
     fontSize: tiny,
-    transform: [{ translateY: shift }, { translateX: responsiveWidth(0.2) }],
+    transform: [{ translateY: shift }],
   };
 };
 
@@ -178,7 +171,8 @@ const normalizeTextNode = ({
     decoded = decoded.replace(/\r?\n/g, ' ');
     if (collapseRuns) decoded = decoded.replace(/[ \t\f\v]+/g, ' ');
   }
-  if (!inPre && decoded.trim() === '') return null;
+  
+  if (!inPre && decoded === '') return null;
 
   return decoded;
 };
@@ -194,22 +188,20 @@ function renderInlineChildAsText({
   skipIsolatedNewline,
   collapseRuns = true,
 }) {
-  // text node
   if (node.kind === '#text') {
     const normalized = normalizeTextNode({
       raw: adaptor.value(node) || '',
-      inPre: false, // not inside <pre> when we're in paragraph flow
+      inPre: false,
       collapseTextNewlines,
       skipIsolatedNewline,
       collapseRuns,
     });
     if (normalized == null) return null;
-    return normalized; // return string; RN <Text> accepts strings as children
+    return normalized;
   }
 
   if (node.kind === 'br') return '\n';
 
-  // other inline tags (span, b, i, u, sub, sup, ...)
   const htmlStyle = adaptor.allStyles(node) || null;
   let childStyle = htmlStyle ? cssStringToRNStyle(htmlStyle) : null;
   childStyle = mapHtmlStyleToRN(node.kind, {
@@ -217,7 +209,6 @@ function renderInlineChildAsText({
     ...(childStyle || {}),
   });
 
-  // sub/sup baseline shift
   childStyle = applySupSubAdjustment(node.kind, childStyle, fontSize);
 
   return (
@@ -255,68 +246,36 @@ const GenerateTextComponent = ({
   let isImage = false;
   let imageSource = null;
 
-  // -------- Paragraph-as-Text path (keeps inline run on one line until natural wrap) --------
   if (item?.kind === 'p') {
+    let pStyle = null;
     const htmlStyleStr = adaptor.allStyles(item) || '';
-    // We ignore white-space:pre-wrap globally via preprocessor,
-    // but paragraph style may still be applied (colors, etc.)
     if (htmlStyleStr) {
-      rnStyle = cssStringToRNStyle(htmlStyleStr);
-      rnStyle = mapHtmlStyleToRN('p', rnStyle);
+      pStyle = cssStringToRNStyle(htmlStyleStr);
+      pStyle = mapHtmlStyleToRN('p', pStyle);
     }
-
-    const out = [];
-    let inlineAcc = [];
-    let seq = 0;
-
-    const flushInline = () => {
-      if (inlineAcc.length === 0) return;
-      out.push(
-        <Text key={`p-inline-${index}-${seq++}`} style={{ fontSize: fontSize * 2, color, ...(rnStyle || {}) }}>
-          {inlineAcc}
-        </Text>
-      );
-      inlineAcc = [];
-    };
-
-    (item.children || []).forEach((child, i) => {
-      if (INLINE_TAGS.has(child.kind)) {
-        const node = renderInlineChildAsText({
-          node: child,
-          key: `inline-${index}-${i}`,
-          color,
-          fontSize,
-          parentStyle: rnStyle,
-          collapseTextNewlines,
-          skipIsolatedNewline,
-          collapseRuns,
-        });
-        if (node !== null && node !== undefined) inlineAcc.push(node);
-      } else {
-        // split: flush inline run, render block child separately
-        flushInline();
-        out.push(
+    
+    // The new renderer uses a View with flexbox for robust inline layout.
+    return (
+      <View style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'baseline', // This aligns text fragments correctly
+        ...pStyle, // Apply paragraph-level styles like textAlign
+      }}>
+        {(item.children || []).map((child, index) => (
           <GenerateTextComponent
-            key={`p-block-${index}-${i}`}
+            key={`p-child-${index}`}
             color={color}
             fontSize={fontSize}
             item={child}
-            index={i}
-            parentStyle={null}
-            parentTag={'p'}
-            collapseTextNewlines={collapseTextNewlines}
-            skipIsolatedNewline={skipIsolatedNewline}
-            collapseRuns={collapseRuns}
+            index={index}
+            // Other props are inherited or not needed for children
           />
-        );
-      }
-    });
-
-    flushInline();
-    return <Fragment>{out}</Fragment>;
+        ))}
+      </View>
+    );
   }
 
-  // -------- Non-text nodes (regular path) ------------------------------
   if (item?.kind !== '#text' && item?.kind !== 'mjx-container' && item?.kind !== '#comment') {
     const htmlStyle = adaptor.allStyles(item) || null;
     if (htmlStyle) {
@@ -326,7 +285,6 @@ const GenerateTextComponent = ({
     rnStyle = mapHtmlStyleToRN(item?.kind, { ...(tagToStyle[item?.kind] || {}), ...(rnStyle || {}) });
   }
 
-  // #text node (outside paragraph flow)
   if (item?.kind === '#text') {
     const normalized = normalizeTextNode({
       raw: adaptor.value(item) || '',
@@ -336,22 +294,15 @@ const GenerateTextComponent = ({
       collapseRuns,
     });
     if (normalized == null) return null;
-
     text = normalized;
-    rnStyle = parentStyle ? mapHtmlStyleToRN('span', parentStyle) : null;
-  }
-  // explicit line break
-  else if (item?.kind === 'br') {
+    rnStyle = parentStyle || null;
+  } else if (item?.kind === 'br') {
     text = '\n';
     rnStyle = { width: '100%', overflow: 'hidden', height: 0 };
-  }
-  // images
-  else if (item?.kind === 'img') {
+  } else if (item?.kind === 'img') {
     isImage = true;
     imageSource = adaptor.getAttribute(item, 'src');
-  }
-  // tables
-  else if (item?.kind === 'table') {
+  } else if (item?.kind === 'table') {
     const tableHead = [];
     const tableRows = [];
     const allRows = [];
@@ -408,10 +359,8 @@ const GenerateTextComponent = ({
     );
   }
 
-  // Sup/Sub adjustment (outside paragraph)
   rnStyle = applySupSubAdjustment(item?.kind, rnStyle, fontSize);
 
-  // Render leaf or recurse
   return (
     <Fragment>
       {text ? (
@@ -458,11 +407,8 @@ const GenerateTextComponent = ({
           );
         })()
       ) : item?.kind === 'mjx-container' ? (
-         <ScrollView
-          horizontal={true}
-          showsHorizontalScrollIndicator={false}
-        >
-          <GenerateSvgComponent item={item} fontSize={fontSize} color={color} />
+        <ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>
+            <GenerateSvgComponent item={item} fontSize={fontSize} color={color} />
         </ScrollView>
       ) : item?.children?.length ? (
         item.children.map((subItem, subIndex) => (
@@ -498,7 +444,6 @@ const ConvertToComponent = ({
 }) => {
   if (!texString) return '';
 
-  // NEW: preprocess incoming HTML string
   const cleaned = preprocessHtmlString(texString, {
     forceSingleLineHtml,
     stripWhiteSpacePreWrap,
@@ -555,7 +500,6 @@ const ConvertToComponent = ({
 /* --------------------- Public component -------------------------------- */
 export const MathJaxSvg = memo((props) => {
   const textext = props.children || '';
-  // preserve original sizing behavior: /2 at root, *2 at <Text>
   const fontSize = props.fontSize ? props.fontSize / 2 : 14;
   const color = props.color ? props.color : 'black';
   const fontCache = props.fontCache;
@@ -570,7 +514,6 @@ export const MathJaxSvg = memo((props) => {
   const collapseRuns =
     typeof props.collapseRuns === 'boolean' ? props.collapseRuns : true;
 
-  // NEW props (default true as requested)
   const forceSingleLineHtml =
     typeof props.forceSingleLineHtml === 'boolean' ? props.forceSingleLineHtml : true;
 
