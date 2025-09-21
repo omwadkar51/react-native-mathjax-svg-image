@@ -98,7 +98,7 @@ const getScale = (_svgString) => {
 };
 
 const applyScale = (svgString, [width, height]) => {
-  if (width > 350) width = responsiveWidth(85);
+  if (width > 350) width = responsiveWidth(100);
   let ret = svgString.replace(
     /(<svg[^\>]+height=\")([\d\.]+)([ep]x\"[^\>]+>)/gi,
     `$1${height}$3`
@@ -458,7 +458,12 @@ const GenerateTextComponent = ({
           );
         })()
       ) : item?.kind === 'mjx-container' ? (
-        <GenerateSvgComponent item={item} fontSize={fontSize} color={color} />
+         <ScrollView
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+        >
+          <GenerateSvgComponent item={item} fontSize={fontSize} color={color} />
+        </ScrollView>
       ) : item?.children?.length ? (
         item.children.map((subItem, subIndex) => (
           <GenerateTextComponent
